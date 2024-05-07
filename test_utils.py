@@ -5,7 +5,7 @@ import numqi
 
 from utils import (get_coherence_of_formation_1qubit, get_coherence_of_formation_pure, CoherenceFormationModel,
                 GeometricCoherenceModel, get_geometric_coherence_1qubit, get_geometric_coherence_pure,
-                get_real_equal_prob_state_geometric_coherence)
+                get_real_equal_prob_state_geometric_coherence, get_hyperdeterminant)
 
 
 def test_CoherenceFormationModel_1qubit():
@@ -66,3 +66,32 @@ def test_get_real_equal_prob_state_geometric_coherence():
     gc_list = np.array(gc_list)
     gc_analytical = get_real_equal_prob_state_geometric_coherence(dim, alpha_list)
     assert np.abs(gc_list-gc_analytical).max() < 1e-7
+
+
+def test_get_hyperdeterminant():
+    N0 = 3
+    np0 = np.random.randn(N0, 8) + 1j*np.random.randn(N0, 8)
+    ret0 = get_hyperdeterminant(np0, mode='tensor')
+    ret1 = get_hyperdeterminant(np0, mode='index')
+    assert np.abs(ret0-ret1).max()<1e-10
+    ret2 = get_hyperdeterminant(torch.tensor(np0, dtype=torch.complex128), mode='tensor').numpy()
+    ret3 = get_hyperdeterminant(torch.tensor(np0, dtype=torch.complex128), mode='index').numpy()
+    assert np.abs(ret0-ret2).max()<1e-10
+    assert np.abs(ret0-ret3).max()<1e-10
+
+    np0 = np.random.randn(N0, 8)
+    ret0 = get_hyperdeterminant(np0, mode='tensor')
+    ret1 = get_hyperdeterminant(np0, mode='index')
+    assert np.abs(ret0-ret1).max()<1e-10
+    ret2 = get_hyperdeterminant(torch.tensor(np0, dtype=torch.float64), mode='tensor').numpy()
+    ret3 = get_hyperdeterminant(torch.tensor(np0, dtype=torch.float64), mode='index').numpy()
+    assert np.abs(ret0-ret2).max()<1e-10
+    assert np.abs(ret0-ret3).max()<1e-10
+
+
+## buggy
+# def test_concurrence_2qubit_pure():
+#     # http://dx.doi.org/10.1103/PhysRevA.86.042302
+#     psi = numqi.random.rand_haar_state(4)
+#     z0 = numqi.entangle.get_concurrence_pure(psi.reshape(2,2))
+#     assert abs(np.vdot(psi, np.kron(numqi.gate.Y, numqi.gate.Y) @ psi.conj())) < 1e-10
