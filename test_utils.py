@@ -5,7 +5,8 @@ import numqi
 
 from utils import (get_coherence_of_formation_1qubit, get_coherence_of_formation_pure, CoherenceFormationModel,
                 GeometricCoherenceModel, get_geometric_coherence_1qubit, get_geometric_coherence_pure,
-                get_real_equal_prob_state_geometric_coherence, get_hyperdeterminant)
+                get_real_equal_prob_state_geometric_coherence, get_hyperdeterminant,
+                MagicStabilizerEntropyModel)
 
 
 def test_CoherenceFormationModel_1qubit():
@@ -95,3 +96,22 @@ def test_get_hyperdeterminant():
 #     psi = numqi.random.rand_haar_state(4)
 #     z0 = numqi.entangle.get_concurrence_pure(psi.reshape(2,2))
 #     assert abs(np.vdot(psi, np.kron(numqi.gate.Y, numqi.gate.Y) @ psi.conj())) < 1e-10
+
+
+def test_MagicStabilizerEntropyModel():
+    num_qubit = 2
+    rho = numqi.random.rand_density_matrix(2**num_qubit)
+    alpha = 2
+    model = MagicStabilizerEntropyModel(alpha, num_qubit, num_term=4*(2**num_qubit))
+    model.set_density_matrix(rho)
+    ret0 = model().item()
+    mat_st = model.manifold().detach()
+    psi_tilde = (mat_st @ model._sqrt_rho_Tconj).numpy().copy().conj()
+    plist = np.linalg.norm(psi_tilde, axis=1, ord=2)**2
+    assert abs(plist.sum()-1) < 1e-10
+    psi_list = psi_tilde / np.sqrt(plist[:,None])
+    pauli_mat = numqi.gate.get_pauli_group(num_qubit)
+    z0 = np.einsum(psi_list.conj(), [0,1], pauli_mat, [3,1,2], psi_list, [0,2], [0,3], optimize=True)
+    assert np.abs(z0.imag).max() < 1e-12
+    ret_ = np.dot(plist, ((z0.real**2)**alpha).sum(axis=1)) / (2**num_qubit)
+    assert abs(ret0+ret_) < 1e-10

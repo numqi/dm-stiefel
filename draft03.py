@@ -1,136 +1,46 @@
+import os
+import pickle
 import numpy as np
 import torch
 import scipy.sparse
-import opt_einsum
 from tqdm import tqdm
+import matplotlib
 import matplotlib.pyplot as plt
 
 import numqi
 
+from utils import MagicStabilizerEntropyModel
 
-def scipy_sparse_csr_to_torch(np0, dtype):
-    assert (np0.ndim==2) and (np0.format=='csr')
-    tmp0 = torch.tensor(np0.indptr, dtype=torch.int64)
-    tmp1 = torch.tensor(np0.indices, dtype=torch.int64)
-    tmp2 = torch.tensor(np0.data, dtype=dtype)
-    ret = torch.sparse_csr_tensor(tmp0, tmp1, tmp2, dtype=dtype)
-    return ret
-
-
-def test_MagicStabilizerEntropyModel():
-    num_qubit = 2
-    rho = numqi.random.rand_density_matrix(2**num_qubit)
-    alpha = 2
-    model = MagicStabilizerEntropyModel(alpha, num_qubit, num_term=4*(2**num_qubit))
-    model.set_density_matrix(rho)
-    ret0 = model().item()
-    mat_st = model.manifold().detach()
-    psi_tilde = (mat_st @ model._sqrt_rho_Tconj).numpy().copy().conj()
-    plist = np.linalg.norm(psi_tilde, axis=1, ord=2)**2
-    assert abs(plist.sum()-1) < 1e-10
-    psi_list = psi_tilde / np.sqrt(plist[:,None])
-    pauli_mat = numqi.gate.get_pauli_group(num_qubit)
-    z0 = np.einsum(psi_list.conj(), [0,1], pauli_mat, [3,1,2], psi_list, [0,2], [0,3], optimize=True)
-    assert np.abs(z0.imag).max() < 1e-12
-    ret_ = np.dot(plist, ((z0.real**2)**alpha).sum(axis=1)) / (2**num_qubit)
-    assert abs(ret0+ret_) < 1e-10
-
-
-def hf_torch_real_soft_maximum(x, epsilon, temperature:float):
-    assert (x.ndim==1) and (epsilon.ndim==0)
-    if temperature is None:
-        ret = torch.maximum(x, epsilon)
-    else:
-        tmp0 = torch.stack([torch.ones_like(x)*epsilon, x], axis=1)
-        ret = temperature*torch.logsumexp(tmp0 / temperature, dim=1)
-    return ret
-
-
-class MagicStabilizerEntropyModel(torch.nn.Module):
-    def __init__(self, alpha:float, num_qubit:int, num_term:int, rank:int|None=None, method:str='polar'):
-        super().__init__()
-        self.dtype = torch.float64
-        self.cdtype = torch.complex128
-        assert alpha>=2
-        self.alpha = float(alpha)
-        self.num_qubit = int(num_qubit)
-        self.num_term = int(num_term)
-        if rank is None:
-            rank = 2**self.num_qubit
-        assert num_term>=rank
-        self.manifold = numqi.manifold.Stiefel(num_term, rank, dtype=self.cdtype, method=method)
-        self.rank = rank
-
-        tmp0 = numqi.gate.get_pauli_group(num_qubit, use_sparse=True)
-        self.pauli_mat = scipy.sparse.vstack(tmp0, format='csr')
-
-        self._sqrt_rho_Tconj = None
-        self._psi_pauli_psi = None
-        self.contract_expr = None
-        # 1/6 is arbitrarily chosen
-        # self._eps = torch.tensor(torch.finfo(self.dtype).smallest_normal**(1/6), dtype=self.dtype)
-        self._eps = torch.tensor(10**(-12), dtype=self.dtype)
-        self.temperature = 0.1
-
-    def set_density_matrix(self, rho):
-        r'''Set the density matrix
-
-        Parameters:
-            rho (np.ndarray): the density matrix, shape=(dim,dim)
-        '''
-        dim = 2**self.num_qubit
-        assert rho.shape == (dim, dim)
-        assert np.abs(rho - rho.T.conj()).max() < 1e-10
-        assert abs(np.trace(rho) - 1) < 1e-10
-        assert np.linalg.eigvalsh(rho)[0] > -1e-10
-        EVL,EVC = np.linalg.eigh(rho)
-        EVL = np.maximum(0, EVL[-self.rank:])
-        assert abs(EVL.sum()-1) < 1e-10
-        EVC = EVC[:,-self.rank:]
-        tmp0 = (EVC * np.sqrt(EVL)).reshape(dim, self.rank)
-        self._sqrt_rho_Tconj = torch.tensor(np.ascontiguousarray(tmp0.T.conj()), dtype=self.cdtype)
-        tmp1 = (self.pauli_mat @ tmp0).reshape(-1, dim, self.rank)
-        self._psi_pauli_psi = torch.tensor(np.einsum(tmp1, [0,1,2], tmp0.conj(), [1,3], [0,3,2], optimize=True), dtype=self.cdtype)
-        # man_st, mat_st.conj(), _psi_pauli_psi
-        self.contract_expr = opt_einsum.contract_expression([self.num_term,self.rank], [0,1],
-                    [self.num_term,self.rank], [0,2], self._psi_pauli_psi, [3,1,2], [3,0], constants=[2])
-
-    def forward(self, use_temperature=True):
-        mat_st = self.manifold()
-        tmp0 = ((self.contract_expr(mat_st, mat_st.conj()).real**2)**self.alpha).sum(axis=0)
-        psi_tilde = mat_st @ self._sqrt_rho_Tconj
-        plist = (psi_tilde.real**2 + psi_tilde.imag**2).sum(axis=1)
-        # tmp2 = hf_torch_real_soft_maximum(plist, self._eps, self.temperature if use_temperature else None)**(1-2*self.alpha)
-        tmp2 = torch.maximum(plist, self._eps)**(1-2*self.alpha)
-        # tmp2 = plist**(1-2*self.alpha)
-        loss = - torch.dot(tmp0, tmp2) / (2**self.num_qubit)
-        return loss
+if torch.get_num_threads()!=1:
+    torch.set_num_threads(1)
 
 
 def demo_H_state():
+    num_qubit = 1
     alpha_list = [2,3,4]
-    # alpha = 2
-    Hstate = np.array([1, np.sqrt(2)-1]) / np.sqrt(4-2*np.sqrt(2))
-    dm_target = Hstate.reshape(-1,1) * Hstate
-    # dm_target = np.eye(2)/2 + np.array([[1,1], [1,-1]]) / (2*np.sqrt(2))
-    num_qubit = numqi.utils.hf_num_state_to_num_qubit(dm_target.shape[0])
     prob_list = np.linspace(0, 1, 100)
+    Hstate = np.array([1, np.sqrt(2)-1]) / np.sqrt(4-2*np.sqrt(2))
+    # psi_target = Hstate
+    psi_target = numqi.random.rand_haar_state(2)
+    dm_target = psi_target.reshape(-1,1) * psi_target.conj()
+    alpha_boundary = 0.5 / np.abs(numqi.gellmann.dm_to_gellmann_basis(dm_target)).sum()
 
     ret_opt = []
     for alpha_i in alpha_list:
         model = MagicStabilizerEntropyModel(alpha_i, num_qubit, num_term=4*(2**num_qubit))
         for prob_i in tqdm(prob_list):
             model.set_density_matrix(numqi.entangle.hf_interpolate_dm(dm_target, alpha=prob_i))
-            ret_opt.append(-numqi.optimize.minimize(model, 'uniform', num_repeat=3, tol=1e-10, print_every_round=0).fun)
+            ret_opt.append(-numqi.optimize.minimize(model, 'uniform', num_repeat=10, tol=1e-10, print_every_round=0).fun)
     ret_opt = np.array(ret_opt).reshape(len(alpha_list), -1)
 
     fig,ax = plt.subplots()
-    ax.axvline(1/np.sqrt(2), color='red', label='1/sqrt(2)')
+    ax.axvline(alpha_boundary, linestyle=':', color='red', label=r'$0.5\|\vec{\rho}\|_1^{-1}$')
     for ind0 in range(len(alpha_list)):
         ax.plot(prob_list, 1-ret_opt[ind0], label=f'alpha={alpha_list[ind0]}')
     ax.set_xlabel(r'$p\rho + (1-p)I/d$')
     ax.set_ylabel('linear Stab Entropy')
-    ax.set_title(f'H state')
+    ax.set_xlim(0, 1)
+    ax.set_title(f'random direction')
     ax.legend()
     ax.set_yscale('log')
     fig.tight_layout()
@@ -147,10 +57,10 @@ def demo_CS_state():
 
     ret_opt = []
     for alpha_i in alpha_list:
-        model = MagicStabilizerEntropyModel(alpha_i, num_qubit, num_term=4*(2**num_qubit), method='polar')
+        model = MagicStabilizerEntropyModel(alpha_i, num_qubit, num_term=2*(2**num_qubit))
         for prob_i in tqdm(prob_list):
             model.set_density_matrix(numqi.entangle.hf_interpolate_dm(dm_target, alpha=prob_i))
-            ret_opt.append(-numqi.optimize.minimize(model, 'uniform', num_repeat=10, tol=1e-10, print_every_round=0).fun)
+            ret_opt.append(-numqi.optimize.minimize(model, 'uniform', num_repeat=3, tol=1e-10, print_every_round=0).fun)
             # numqi.optimize.minimize_adam(model, num_step=5000, theta0='uniform', optim_args=('adam', 0.03,0.01), tqdm_update_freq=0)
     ret_opt = np.array(ret_opt).reshape(len(alpha_list), -1)
 
@@ -177,7 +87,7 @@ def demo_Toffoli_state():
 
     ret_opt = []
     for alpha_i in alpha_list:
-        model = MagicStabilizerEntropyModel(alpha_i, num_qubit, num_term=4*(2**num_qubit), method='so-exp')
+        model = MagicStabilizerEntropyModel(alpha_i, num_qubit, num_term=4*(2**num_qubit), method='polar')
         for prob_i in tqdm(prob_list):
             model.set_density_matrix(numqi.entangle.hf_interpolate_dm(dm_target, alpha=prob_i))
             ret_opt.append(-numqi.optimize.minimize(model, 'uniform', num_repeat=3, tol=1e-10, print_every_round=0).fun)
@@ -213,3 +123,61 @@ def demo_logsumexp():
     ax.legend()
     fig.tight_layout()
     fig.savefig('tbd02.png', dpi=200)
+
+
+def demo_bloch_cross_section():
+    datapath = 'data/bloch_cross_section.pkl'
+    xlist = np.linspace(-0.54, 0.54, 101)
+    ylist = np.linspace(-0.54, 0.54, 101)
+
+    if not os.path.exists(datapath):
+        model = MagicStabilizerEntropyModel(alpha=2, num_qubit=1, num_term=4)
+        ret_opt = np.zeros((len(xlist)*len(ylist)), dtype=np.float64)
+        # to completely remove those coarse points, a larger num_repeat is needed
+        kwargs = dict(theta0='uniform', num_repeat=100, tol=1e-10, print_every_round=0, early_stop_threshold=(1e-8)-1)
+        tmp0 = tuple((xi,yi) for xi in xlist for yi in ylist)
+        for ind0,(xi,yi) in tqdm(enumerate(tmp0), total=len(xlist)*len(ylist)):
+            tmp0 = np.array([xi, yi, 0])
+            if np.linalg.norm(tmp0) > 0.5:
+                ret_opt[ind0] = np.nan
+            else:
+                model.set_density_matrix(numqi.gellmann.gellmann_basis_to_dm(tmp0))
+                ret_opt[ind0] = 1-(-numqi.optimize.minimize(model, **kwargs).fun)
+        ret_opt = ret_opt.reshape(len(xlist), len(ylist))
+        with open(datapath, 'wb') as fid:
+            pickle.dump(dict(xlist=xlist, ylist=ylist, ret_opt=ret_opt), fid)
+    else:
+        with open(datapath, 'rb') as fid:
+            tmp0 = pickle.load(fid)
+            xlist = tmp0['xlist']
+            ylist = tmp0['ylist']
+            ret_opt = tmp0['ret_opt']
+
+    tmp0 = ret_opt[np.logical_not(np.isnan(ret_opt))]
+    ret_opt_min = tmp0.min()
+    ret_opt_max = tmp0.max()
+    print(ret_opt_min, ret_opt_max)
+    # plt.get_cmap('winter')(np.array([0.0, 1.0])) #RGBA
+
+    z0 = ret_opt.copy()
+    z0[np.isnan(z0)] = ret_opt_min
+    z0 = np.clip(z0, 1e-7, z0.max())
+    tmp0 = (xlist.reshape(-1,1)**2 + ylist.reshape(1,-1)**2) > 0.26
+    z0[tmp0] = np.nan
+    fig,ax = plt.subplots()
+    hcontourf = ax.contourf(xlist, ylist, np.log10(z0.T), levels=30, cmap='RdPu')
+    tmp0 = np.linspace(0, 2*np.pi, 100)
+    ax.plot(0.5*np.cos(tmp0), 0.5*np.sin(tmp0), linestyle='solid', color='black', linewidth=3)
+    ax.set_aspect('equal')
+    cax = fig.colorbar(hcontourf, shrink=0.8)
+    cax.ax.get_yticks()
+    tmp0 = list(range(-6, 0))
+    cax.ax.set_yticks(tmp0)
+    cax.ax.set_yticklabels(['$10^{}$'.format('{'+str(x)+'}') for x in tmp0])
+    ax.axis('off')
+    fig.tight_layout()
+    fig.savefig('tbd02.png', dpi=200)
+
+
+if __name__=='__main__':
+    demo_bloch_cross_section()
