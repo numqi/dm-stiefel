@@ -162,12 +162,14 @@ def demo_bloch_cross_section():
     z0 = ret_opt.copy()
     z0[np.isnan(z0)] = ret_opt_min
     z0 = np.clip(z0, 1e-7, z0.max())
-    tmp0 = (xlist.reshape(-1,1)**2 + ylist.reshape(1,-1)**2) > 0.26
+    tmp0 = (xlist.reshape(-1,1)**2 + ylist.reshape(1,-1)**2) > 0.255
     z0[tmp0] = np.nan
     fig,ax = plt.subplots()
-    hcontourf = ax.contourf(xlist, ylist, np.log10(z0.T), levels=30, cmap='RdPu')
+    hcontourf = ax.contourf(xlist, ylist, np.log10(z0.T), levels=20, cmap='RdPu')
     tmp0 = np.linspace(0, 2*np.pi, 100)
     ax.plot(0.5*np.cos(tmp0), 0.5*np.sin(tmp0), linestyle='solid', color='black', linewidth=3)
+    ax.set_xlim(-0.52, 0.52)
+    ax.set_ylim(-0.52, 0.52)
     ax.set_aspect('equal')
     cax = fig.colorbar(hcontourf, shrink=0.8)
     cax.ax.get_yticks()
@@ -176,7 +178,8 @@ def demo_bloch_cross_section():
     cax.ax.set_yticklabels(['$10^{}$'.format('{'+str(x)+'}') for x in tmp0])
     ax.axis('off')
     fig.tight_layout()
-    fig.savefig('tbd02.png', dpi=200)
+    fig.savefig('data/bloch_cross_section.png', dpi=200)
+    fig.savefig('data/bloch_cross_section.pdf')
 
 
 if __name__=='__main__':
