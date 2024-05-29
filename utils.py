@@ -5,6 +5,7 @@ import opt_einsum
 import scipy.sparse
 
 import numqi
+import cvxpy as cp
 
 def get_coherence_of_formation_pure(psi:np.ndarray) -> float:
     assert psi.ndim==1
@@ -287,3 +288,24 @@ def scipy_sparse_csr_to_torch(np0, dtype):
     tmp2 = torch.tensor(np0.data, dtype=dtype)
     ret = torch.sparse_csr_tensor(tmp0, tmp1, tmp2, dtype=dtype)
     return ret
+
+def get_geometric_measure_coherence_sdp(rho):
+    d = rho.shape[0]
+
+    delt = cp.Variable((d,d), diag = True)
+    X = cp.Variable((d,d), complex=True)
+
+    constraints = [
+        cp.bmat([[rho, X], [cp.conj(X.T), delt]]) >> 0,
+        delt >> 0,
+        cp.trace(delt) == 1
+    ]
+
+    obj = cp.Maximize(cp.real(cp.trace(X)+cp.trace(X.H)))
+
+    prob = cp.Problem(obj, constraints)
+    result = prob.solve()
+    
+    F = ((np.trace(X.value)+np.trace(X.value.conj().T))/2).real
+    C = 1 - F**2
+    return C
