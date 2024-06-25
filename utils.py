@@ -3,6 +3,7 @@ import numpy as np
 import torch
 import opt_einsum
 import scipy.sparse
+import cvxpy
 
 import numqi
 import cvxpy as cp
@@ -126,7 +127,54 @@ class GeometricCoherenceModel(torch.nn.Module):
         return ret
 
 
-def get_real_equal_prob_state_geometric_coherence(dim:int, alpha:float):
+def get_maximally_coherent_state(dim:int):
+    r'''Get the maximally coherent state
+
+    reference: Maximally coherent states and coherence-preserving operations
+    [arxiv-link](https://arxiv.org/abs/1511.02576)
+
+    Parameters:
+        dim (int): the dimension of the state
+
+    Returns:
+        ret (np.ndarray): the maximally coherent state, shape=(dim,)
+    '''
+    assert dim>=1
+    ret = np.ones(dim, dtype=np.float64)/np.sqrt(dim)
+    return ret
+
+
+def get_maximally_coherent_state_mixed(dim:int, alpha:float):
+    r'''Get the interpolation between the maximally coherent state and the maximally mixed state
+
+    reference: Numerical and analytical results for geometric measure of coherence and geometric measure of entanglement
+    [arxiv-link](https://arxiv.org/abs/1903.10944)
+
+    Parameters:
+        dim (int): the dimension of the state
+        alpha (float): the interpolation parameter
+
+    Returns:
+        ret (np.ndarray): density matrix, shape=(dim,dim)
+    '''
+    assert dim>=1
+    rho = np.ones((dim,dim), dtype=np.float64)/dim
+    ret = numqi.entangle.hf_interpolate_dm(rho, alpha=alpha)
+    return ret
+
+def get_maximally_coherent_state_mixed_coherence(dim:int, alpha:float|np.ndarray):
+    r'''Get the geometric measure of coherence for the maximally coherent state (mcs) along the interpolation with maximally mixed state
+
+    reference: Numerical and analytical results for geometric measure of coherence and geometric measure of entanglement
+    [arxiv-link](https://arxiv.org/abs/1903.10944)
+
+    Parameters:
+        dim (int): the dimension of the state
+        alpha (float,np.ndarray): the interpolation parameter
+
+    Returns:
+        ret (float,np.ndarray): the coherence
+    '''
     tmp0 = (dim-1) * np.sqrt(np.maximum(1-alpha, 0))
     tmp1 = np.sqrt(np.maximum(1 + (dim-1)*alpha, 0))
     ret = 1 - (tmp0 + tmp1)**2 / (dim*dim)
@@ -289,23 +337,39 @@ def scipy_sparse_csr_to_torch(np0, dtype):
     ret = torch.sparse_csr_tensor(tmp0, tmp1, tmp2, dtype=dtype)
     return ret
 
-def get_geometric_measure_coherence_sdp(rho):
-    d = rho.shape[0]
 
-    delt = cp.Variable((d,d), diag = True)
-    X = cp.Variable((d,d), complex=True)
+def get_geometric_measure_coherence_sdp(rho:np.ndarray):
+    r'''Get the geometric measure of coherence using semi-definite programming (SDP)
 
-    constraints = [
-        cp.bmat([[rho, X], [cp.conj(X.T), delt]]) >> 0,
-        delt >> 0,
-        cp.trace(delt) == 1
+    reference: Numerical and analytical results for geometric measure of coherence and geometric measure of entanglement
+    [arxiv-link](https://arxiv.org/abs/1903.10944)
+
+    Parameters:
+        rho (np.ndarray): the density matrix, shape=(dim,dim), support batch input (batch,dim,dim)
+
+    Returns:
+        ret (float,np.ndarray): the coherence
+    '''
+    assert rho.ndim in {2,3}
+    isone = (rho.ndim == 2)
+    if isone:
+        rho = rho[None]
+    assert np.abs(rho-rho.transpose(0,2,1).conj()).max() < 1e-10
+    dim = rho.shape[-1]
+    cvxD = cvxpy.Variable((dim,dim), diag=True)
+    cvxX = cvxpy.Variable((dim,dim), complex=True)
+    cvxrho = cvxpy.Parameter((dim,dim), PSD=True) #hermitian=True
+    constraint = [
+        cvxpy.bmat([[cvxrho, cvxX], [cvxpy.conj(cvxX.T), cvxD]]) >> 0,
+        cvxD >> 0,
+        cvxpy.trace(cvxD) == 1
     ]
-
-    obj = cp.Maximize(cp.real(cp.trace(X)+cp.trace(X.H)))
-
-    prob = cp.Problem(obj, constraints)
-    result = prob.solve()
-    
-    F = ((np.trace(X.value)+np.trace(X.value.conj().T))/2).real
-    C = 1 - F**2
-    return C
+    obj = cvxpy.Maximize(cvxpy.real(cvxpy.trace(cvxX)))
+    prob = cvxpy.Problem(obj, constraint)
+    ret = []
+    for x in rho:
+        cvxrho.value = x
+        prob.solve()
+        ret.append(1 - obj.value**2)
+    ret = ret[0] if isone else np.array(ret)
+    return ret

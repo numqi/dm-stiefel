@@ -1,8 +1,5 @@
-import os
-import pickle
 import numpy as np
 import torch
-import scipy.sparse
 from tqdm import tqdm
 import matplotlib
 import matplotlib.pyplot as plt
@@ -103,23 +100,5 @@ def demo_Toffoli_state():
     ax.set_title(f'Toffoli state')
     ax.legend()
     ax.set_yscale('log')
-    fig.tight_layout()
-    fig.savefig('tbd02.png', dpi=200)
-
-
-def demo_logsumexp():
-    xdata = np.linspace(-0.01, 1, 301)
-    hf0 = lambda x: np.maximum(x, 1e-10)
-    T_list = [0.001,0.01, 0.03, 0.1, 0.3]
-
-    tmp0 = np.stack([xdata, hf0(xdata)], axis=1)
-    ydata_list = np.stack([x*scipy.special.logsumexp(tmp0/x, axis=1) for x in T_list])
-
-    fig,ax = plt.subplots()
-    for ind0 in reversed(range(len(T_list))):
-        ax.plot(xdata, ydata_list[ind0]-hf0(xdata), label=f'T={T_list[ind0]}')
-    # ax.plot(xdata, hf0(xdata), label='maximum')
-    ax.set_yscale('log')
-    ax.legend()
     fig.tight_layout()
     fig.savefig('tbd02.png', dpi=200)

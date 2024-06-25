@@ -143,6 +143,7 @@ def test_get_3tangle_GHZ_W_pure():
 
 
 def bug_test_get_3tangle_GHZ_W_mixed():
+    # TODO bug unsolved
     s12 = 1/np.sqrt(2)
     s13 = 1/np.sqrt(3)
     abcdf = np.array([s12, s12, s13, s13, s13])
@@ -167,25 +168,26 @@ def bug_test_get_3tangle_GHZ_W_mixed():
     fig.savefig('tbd02.png', dpi=200)
 
 
-tmp0 = np.zeros(8, dtype=np.float64)
-tmp0[[0,7]] = 1/np.sqrt(2)
-dm_target = tmp0.reshape(8,1) * tmp0.conj()
-alpha_list = np.linspace(0, 1, 100)
+def demo_misc00():
+    tmp0 = np.zeros(8, dtype=np.float64)
+    tmp0[[0,7]] = 1/np.sqrt(2)
+    dm_target = tmp0.reshape(8,1) * tmp0.conj()
+    alpha_list = np.linspace(0, 1, 100)
 
-model = ThreeTangleModel(num_term=4*8)
-ret_opt = []
-for alpha_i in tqdm(alpha_list):
-    model.set_density_matrix(numqi.entangle.hf_interpolate_dm(dm_target, alpha=alpha_i))
-    ret_opt.append(numqi.optimize.minimize(model, 'uniform', num_repeat=3, tol=1e-10, print_every_round=0).fun)
-    # numqi.optimize.minimize_adam(model, num_step=5000, theta0='uniform', optim_args=('adam', 0.01, 0.001), early_stop_threshold=1e-7)
-ret_opt = np.array(ret_opt)
+    model = ThreeTangleModel(num_term=4*8)
+    ret_opt = []
+    for alpha_i in tqdm(alpha_list):
+        model.set_density_matrix(numqi.entangle.hf_interpolate_dm(dm_target, alpha=alpha_i))
+        ret_opt.append(numqi.optimize.minimize(model, 'uniform', num_repeat=3, tol=1e-10, print_every_round=0).fun)
+        # numqi.optimize.minimize_adam(model, num_step=5000, theta0='uniform', optim_args=('adam', 0.01, 0.001), early_stop_threshold=1e-7)
+    ret_opt = np.array(ret_opt)
 
-fig,ax = plt.subplots()
-ax.plot(alpha_list, ret_opt, 'x', label='manifold-opt')
-ax.legend()
-ax.set_xlabel('alpha')
-ax.set_ylabel('3-tangle')
-ax.set_title('GHZ state')
-ax.set_yscale('log')
-fig.tight_layout()
-fig.savefig('tbd02.png', dpi=200)
+    fig,ax = plt.subplots()
+    ax.plot(alpha_list, ret_opt, 'x', label='manifold-opt')
+    ax.legend()
+    ax.set_xlabel('alpha')
+    ax.set_ylabel('3-tangle')
+    ax.set_title('GHZ state')
+    ax.set_yscale('log')
+    fig.tight_layout()
+    fig.savefig('tbd02.png', dpi=200)

@@ -5,9 +5,9 @@ import numqi
 
 from utils import (get_coherence_of_formation_1qubit, get_coherence_of_formation_pure, CoherenceFormationModel,
                 GeometricCoherenceModel, get_geometric_coherence_1qubit, get_geometric_coherence_pure,
-                get_real_equal_prob_state_geometric_coherence, get_hyperdeterminant,
-                MagicStabilizerEntropyModel)
-
+                get_hyperdeterminant,
+                MagicStabilizerEntropyModel, get_geometric_measure_coherence_sdp)
+from utils import get_maximally_coherent_state_mixed, get_maximally_coherent_state_mixed_coherence
 
 def test_CoherenceFormationModel_1qubit():
     dim = 2
@@ -50,23 +50,29 @@ def test_get_geometric_coherence_1qubit():
         assert abs(ret_-ret0) < 1e-10
 
 
-def test_get_real_equal_prob_state_geometric_coherence():
-    dim = 3
-    tmp0 = np.ones(dim, dtype=np.float64)/np.sqrt(dim)
-    dm_target = tmp0.reshape(-1,1) * tmp0.conj()
-    alpha_list = np.linspace(0, 1, 10)
 
+def test_get_maximally_coherent_state_mixed_coherence():
+    dim = 3
+    alpha_list = np.linspace(0, 1, 10)
     model = GeometricCoherenceModel(dim, num_term=4*dim, temperature=0.3)
     kwargs = dict(theta0='uniform', num_repeat=3, tol=1e-10, print_every_round=0)
-    gc_list = []
+    gmc_list = []
     for alpha_i in alpha_list:
-        model.set_density_matrix(numqi.entangle.hf_interpolate_dm(dm_target, alpha=alpha_i))
+        model.set_density_matrix(get_maximally_coherent_state_mixed(dim, alpha_i))
         theta_optim = numqi.optimize.minimize(model, **kwargs).fun
         with torch.no_grad():
-            gc_list.append(model(use_temperature=False).item())
-    gc_list = np.array(gc_list)
-    gc_analytical = get_real_equal_prob_state_geometric_coherence(dim, alpha_list)
-    assert np.abs(gc_list-gc_analytical).max() < 1e-7
+            gmc_list.append(model(use_temperature=False).item())
+    gmc_ = get_maximally_coherent_state_mixed_coherence(dim, alpha_list)
+    assert np.abs(gmc_list-gmc_).max() < 1e-7
+
+
+def test_get_geometric_measure_coherence_sdp():
+    dim = 3
+    alpha_list = np.linspace(0, 0.999, 10) #seem a large error for alpha=1
+    gmc_ = get_maximally_coherent_state_mixed_coherence(dim, alpha_list)
+    tmp0 = np.stack([get_maximally_coherent_state_mixed(dim, x) for x in alpha_list])
+    gmc_list = get_geometric_measure_coherence_sdp(tmp0)
+    print(np.abs(gmc_-gmc_list))
 
 
 def test_get_hyperdeterminant():
