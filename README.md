@@ -1,5 +1,7 @@
 # dm Stiefel
 
+[![DOI](https://zenodo.org/badge/796548095.svg)](https://zenodo.org/doi/10.5281/zenodo.12540300)
+
 convex roof extension via manifold optimization over Stiefel manifold.
 
 This repository is to support arxiv paper ""
