@@ -283,6 +283,51 @@ def plot_bloch_cross_section_i(key:str):
     fig.savefig(datapath.replace('.pkl','.pdf'), transparent=True)
 
 
+def plot_noisy_maximally_coherent_state_time():
+    tableau = ['#006BA4', '#FF800E', '#ABABAB', '#595959', '#5F9ED1', '#C85200', '#898989', '#A2C8EC', '#FFBC79', '#CFCFCF']
+    # generated in paper_data.ipynb
+    with open('data/noisy_maximally_coherent_state.pkl', 'rb') as fid:
+        err_array, time_array_gd, time_array_sdp = pickle.load(fid)
+    p_list = [0.05, 0.1, 0.5, 0.9, 0.95]
+    dim_list = np.arange(2, 51)
+
+    def hf_fit(xdata, ydata):
+        tmp0 = np.polynomial.Polynomial.fit(np.log(xdata), np.log(ydata), 1).convert().coef
+        coeffa = np.exp(tmp0[0])
+        coeffb = tmp0[1]
+        # a x^b
+        return coeffa, coeffb
+
+    index = slice(20, None)
+    z0 = np.stack([hf_fit(dim_list[index], x[index]) for x in time_array_gd.T])
+    z1 = np.stack([hf_fit(dim_list[index], x[index]) for x in time_array_sdp.T])
+    coeff_gd = z0.mean(axis=0)
+    coeff_sdp = z1.mean(axis=0)
+    fitx = np.arange(2, 56)
+    fity_gd = coeff_gd[0] * (fitx**coeff_gd[1])
+    fity_sdp = coeff_sdp[0] * (fitx**coeff_sdp[1])
+
+    FONTSIZE = 14
+    fig,ax = plt.subplots()
+    for ind0 in range(len(p_list)):
+        ax.plot(dim_list, time_array_gd[:,ind0], color=tableau[ind0], label=f'p={p_list[ind0]}')
+        ax.plot(dim_list, time_array_sdp[:,ind0], color=tableau[ind0], linestyle='--')
+    ax.plot(fitx, fity_gd, color=tableau[5], linewidth=2.5)
+    ax.plot(fitx, fity_sdp, color=tableau[5], linewidth=2.5, linestyle='--')
+    hf0 = lambda a,b: r'$t=\frac{1}{' + str(int(round(1/a))) + r'}d^{' + str(round(b, 1)) + r'}$'
+    ax.text(50, 1.0, hf0(*coeff_gd), color=tableau[5], horizontalalignment='center', verticalalignment='center', fontsize=FONTSIZE+2)
+    ax.text(45, 4.5, hf0(*coeff_sdp), color=tableau[5], horizontalalignment='center', verticalalignment='center', fontsize=FONTSIZE+2)
+    # ax.set_yscale('log')
+    ax.set_xlabel('dimension', fontsize=FONTSIZE)
+    ax.set_ylabel('time (s)', fontsize=FONTSIZE)
+    ax.legend(fontsize=FONTSIZE)
+    ax.tick_params(axis='both', which='major', labelsize=FONTSIZE-2)
+    # ax.tick_params(axis='both', which='minor', labelsize=8)
+    fig.tight_layout()
+    fig.savefig('tbd00.png', dpi=200)
+    fig.savefig('data/noisy_maximally_coherent_state_time.png', dpi=200)
+    fig.savefig('data/noisy_maximally_coherent_state_time.pdf', transparent=True)
+
 if __name__ == '__main__':
     plot_bloch_cross_section_i('origin')
     plot_bloch_cross_section_i('001')
