@@ -4,7 +4,7 @@
 
 convex roof extension via manifold optimization over Stiefel manifold.
 
-This repository is to support arxiv paper ""
+This repository is to support paper "Unified Framework for Calculating Convex Roof Resource Measures" 
 
 ## quick start
 
