@@ -2,13 +2,13 @@
 
 [![DOI](https://zenodo.org/badge/796548095.svg)](https://zenodo.org/doi/10.5281/zenodo.12540300)
 
-convex roof extension via manifold optimization over Stiefel manifold.
+This is the repository for the paper "Unified Framework for Calculating Convex Roof Resource Measures". [arxiv-link](https://arxiv.org/abs/2406.19683)
 
-This repository is to support paper "Unified Framework for Calculating Convex Roof Resource Measures" 
+🚀 Exciting News! We've launched the `numqi` package [github/numqi](https://github.com/numqi/numqi), combining all the functionalities of this repository and even more! 🌟 To dive into these features, just install `numqi` using `pip install numqi`, and explore the relevant functions within the package. 🛠️
 
 ## quick start
 
-This project is based on `numqi` package [github-link](https://github.com/numqi/numqi), which is a package for numerical optimization for quantum information. To install `numqi`, run the following command:
+This project is based on `numqi` package [github-link](https://github.com/numqi/numqi), which is a package for numerical optimization for quantum information. To install `numqi`, run the following command (see [numqi-doc](https://numqi.github.io/numqi/installation/) for detailed installation instruction):
 
 ```bash
 pip install numqi
