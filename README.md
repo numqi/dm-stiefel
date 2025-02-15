@@ -8,6 +8,15 @@ This is the repository for the paper "Unified Framework for Calculating Convex R
 
 ## quick start
 
+Most of functions in this repository have been merged into `numqi` package while this repository is mainly kept for reproducing all results of the paper, below are a series of tutorials related. In the following links, click on `open-in-colab`, then you can directly run all the python code in your browser, no need to install anything on your laptop.
+
+1. [doc-link](https://numqi.github.io/numqi/application/resource/pure-state-decomp/#pure-state-decomposition) Pure state decomposition
+2. [doc-link](https://numqi.github.io/numqi/application/entangle/measure/#entanglement-of-formation) Entanglement of formation
+3. [doc-link](https://numqi.github.io/numqi/application/entangle/linear_entropy_entanglement/#linear-entropy-of-entanglement) Lienar entropy of entanglement
+4. [doc-link](https://numqi.github.io/numqi/application/magic/stabilizer_purity/#stabilizer-purity) Magic resource: stabilizer purity
+5. [doc-link](https://numqi.github.io/numqi/application/coherence/cof/#coherence-of-formation) Cohernce of formation
+6. [doc-link](https://numqi.github.io/numqi/application/coherence/gmc/#geometric-measure-of-coherence) Geometric measure of coherence
+
 This project is based on `numqi` package [github-link](https://github.com/numqi/numqi), which is a package for numerical optimization for quantum information. To install `numqi`, run the following command (see [numqi-doc](https://numqi.github.io/numqi/installation/) for detailed installation instruction):
 
 ```bash
